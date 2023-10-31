@@ -61,8 +61,7 @@ public class DocenteController {
 	
 	@PostMapping("/upload")
 	public ResponseEntity<?> cargarExcel(@RequestParam("file") MultipartFile file) {
-		docenteService.cargarDocentes(file);
-		return ResponseEntity.status(HttpStatus.CREATED).build();
+		return ResponseEntity.status(HttpStatus.CREATED).body(docenteService.cargarDocentes(file));
 	}
 	
 	@GetMapping("/filtrar/{termino}")

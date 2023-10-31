@@ -12,6 +12,6 @@ public class CamposUnicosEstudianteDto {
 	private Long identificacion;
 	private String correoElectronico;
 	private String correoUniversidad;
-	private List<String> resolucionesProrroga;
-	private List<String> resolucionesReingreso;
+	private List<ProrrogaDto> prorrogas;
+	private List<ReingresoDto> reingresos;
 }

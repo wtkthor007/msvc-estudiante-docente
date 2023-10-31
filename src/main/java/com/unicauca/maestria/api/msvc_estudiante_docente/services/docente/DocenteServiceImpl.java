@@ -11,14 +11,11 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-
 import javax.validation.Valid;
-
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,13 +29,13 @@ import com.unicauca.maestria.api.msvc_estudiante_docente.domain.Docente;
 import com.unicauca.maestria.api.msvc_estudiante_docente.domain.DocenteLineaInvestigacion;
 import com.unicauca.maestria.api.msvc_estudiante_docente.domain.LineaInvestigacion;
 import com.unicauca.maestria.api.msvc_estudiante_docente.domain.Persona;
+import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.common.EstadoCargaMasivaDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.common.PersonaDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.docente.CamposUnicosDocenteDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.docente.DocenteResponseDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.docente.DocenteSaveDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.docente.LineaInvestigacionDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.docente.TituloDto;
-import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstudianteSaveDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.exceptions.*;
 import com.unicauca.maestria.api.msvc_estudiante_docente.mappers.*;
 import com.unicauca.maestria.api.msvc_estudiante_docente.repositories.*;
@@ -58,8 +55,7 @@ public class DocenteServiceImpl implements DocenteService{
 	private final DocenteResponseMapper DocenteResponseMapper;
 	private final LineaInvestigacionMapper lineaInvestigacionMapper;
 	private final InformacionUnicaDocente informacionUnicaDocente;
-	@Autowired
-    private Validator validator;
+    private final Validator validator;
 	
 	@Override
 	@Transactional
@@ -132,7 +128,10 @@ public class DocenteServiceImpl implements DocenteService{
 	
 	@Override
 	@Transactional
-	public void cargarDocentes(MultipartFile file) {
+	public EstadoCargaMasivaDto cargarDocentes(MultipartFile file) {
+		
+		
+		EstadoCargaMasivaDto estadoCargaMasivaDto=null;
 		try (Workbook workBook = new XSSFWorkbook(file.getInputStream())){
 			Sheet sheetDocente = workBook.getSheetAt(0);
 			Sheet sheetLineaInvestigacion = workBook.getSheetAt(1);
@@ -143,13 +142,27 @@ public class DocenteServiceImpl implements DocenteService{
 					.map(rowDocente->crearDocente(rowDocente,sheetTitulo)).toList();
 					
 			List<Long> idsPersonasBD = personaRepository.findAll().stream().map(Persona::getIdentificacion).toList();
+			
+			List<PersonaDto> docentesEstructuraIncorrecta = docentes.stream()
+					.filter(this::ValidarDocente).map(docente->docente.getPersona())
+					.toList();
+			
 			List<PersonaDto> docentesExistentes = docentes.stream()
 					.filter(docente->idsPersonasBD.contains(docente.getPersona().getIdentificacion()))
 					.map(docente->docente.getPersona())
 					.toList();
 			
-			docenteRepository.saveAll(docenteSaveMapper.toEntityList(docentes));
+			List<DocenteSaveDto> docentesAcargar = docentes
+					.stream().filter(docente->
+					!docentesExistentes.contains(docente.getPersona())&&!docentesEstructuraIncorrecta.contains(docente.getPersona()))
+					.toList();
+				
+			List<Docente> docentesCargados = docenteRepository.saveAll(docenteSaveMapper.toEntityList(docentesAcargar));
 			
+			estadoCargaMasivaDto = EstadoCargaMasivaDto.builder()
+					.registrados(docentesCargados.size())
+					.existentes(docentesExistentes)
+					.estructuraIncorrecta(docentesEstructuraIncorrecta).build();
 			
 			StreamSupport.stream(sheetLineaInvestigacion.spliterator(), false)
 			.skip(1).forEach(this::cargarLineasInvestigacionDocente);
@@ -157,10 +170,11 @@ public class DocenteServiceImpl implements DocenteService{
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		return estadoCargaMasivaDto;
 	}
 	
-	private boolean ValidarEstudiante(@Valid DocenteSaveDto docenteSaveDto) {
-		BindingResult bindingResult = new BeanPropertyBindingResult(docenteSaveDto, "estudianteSaveDto");
+	private boolean ValidarDocente(@Valid DocenteSaveDto docenteSaveDto) {
+		BindingResult bindingResult = new BeanPropertyBindingResult(docenteSaveDto, "docenteSaveDto");
 		validator.validate(docenteSaveDto, bindingResult);
 		return bindingResult.hasErrors();
 	}
@@ -221,7 +235,7 @@ public class DocenteServiceImpl implements DocenteService{
 	
 	private DocenteSaveDto crearDocente(Row rowDocente,Sheet sheetTitulo) {
 		
-		String codigo= rowDocente.getCell(7).getStringCellValue();
+		String codigo= rowDocente.getCell(7)!=null?rowDocente.getCell(7).getStringCellValue():"";
 		String facultad= rowDocente.getCell(8).getStringCellValue();
 		String departamento= rowDocente.getCell(9).getStringCellValue();
 		EscalafonDocente escalafonDocente = obtenerValorEnum(rowDocente, 10, EscalafonDocente.class);
@@ -242,9 +256,9 @@ public class DocenteServiceImpl implements DocenteService{
 
 		return PersonaDto.builder()
 				.identificacion((long)rowDocente.getCell(0).getNumericCellValue())
-				.nombre(rowDocente.getCell(1).getStringCellValue())
-				.apellido(rowDocente.getCell(2).getStringCellValue())
-				.correoElectronico(rowDocente.getCell(3).getStringCellValue())
+				.nombre(rowDocente.getCell(1)!=null? rowDocente.getCell(1).getStringCellValue():"")
+				.apellido(rowDocente.getCell(2)!=null?rowDocente.getCell(2).getStringCellValue():"")
+				.correoElectronico(rowDocente.getCell(3)!=null?rowDocente.getCell(3).getStringCellValue():"")
 				.telefono(rowDocente.getCell(4).getStringCellValue())
 				.genero(obtenerValorEnum(rowDocente, 5, Genero.class))
 				.tipoIdentificacion(obtenerValorEnum(rowDocente, 6, TipoIdentificacion.class))
@@ -272,7 +286,18 @@ public class DocenteServiceImpl implements DocenteService{
 					.lineaInvestigacion(lineaInvestigacionRepository.findById(idLineaInvestigacion).orElse(null))
 					.docente(docenteRepository.findByCodigo(codigoDocente))
 					.build();
-			docenteLineaInvestigacionRepository.save(docenteLineaInvestigacion);
+	
+			List<DocenteLineaInvestigacion> docenteLineaBD = docenteLineaInvestigacionRepository.findAll().stream().toList();
+			if(docenteLineaBD.isEmpty()) {
+				docenteLineaInvestigacionRepository.save(docenteLineaInvestigacion);
+			}else {
+				long count = docenteLineaBD.stream().filter(dl->dl.getDocente().getCodigo().equals(codigoDocente) && dl.getLineaInvestigacion().getId().equals(idLineaInvestigacion)).count();
+				if(count==0) {
+					docenteLineaInvestigacionRepository.save(docenteLineaInvestigacion);
+				}
+			}
+			
+			
 	}
 	
 	private Stream<Row> filtrarRow(String codigoDocente,Sheet sheetLineaInvestigacion,int indice){
@@ -304,7 +329,6 @@ public class DocenteServiceImpl implements DocenteService{
 		docenteBD.setEscalafon(docente.getEscalafon());
 		docenteBD.setTipoVinculacion(docente.getTipoVinculacion());
 		docenteBD.setTitulos(docente.getTitulos());
-
 	}
 	
 	private Map<String, String> validacionCampoUnicos(CamposUnicosDocenteDto camposUnicos,CamposUnicosDocenteDto camposUnicosBD) {

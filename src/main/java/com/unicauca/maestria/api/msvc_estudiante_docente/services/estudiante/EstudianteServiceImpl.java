@@ -19,7 +19,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,10 +31,10 @@ import com.unicauca.maestria.api.msvc_estudiante_docente.common.enums.*;
 import com.unicauca.maestria.api.msvc_estudiante_docente.domain.*;
 import com.unicauca.maestria.api.msvc_estudiante_docente.domain.embeddables.Caracterizacion;
 import com.unicauca.maestria.api.msvc_estudiante_docente.domain.embeddables.InformacionMaestriaActual;
+import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.common.EstadoCargaMasivaDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.common.PersonaDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.BecaDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.CamposUnicosEstudianteDto;
-import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstadoCargaEstudianteDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstadoEstudianteDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstudianteResponseDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstudianteSaveDto;
@@ -62,8 +61,7 @@ public class EstudianteServiceImpl implements EstudianteService {
 	private final ProrrogaMapper prrorrogaMapper;
 	private final ReingresoMapper reingresoMapper;
 	private final InformacionUnicaEstudiante informacionUnicaEstudiante;
-	@Autowired
-    private Validator validator;
+    private final Validator validator;
 
 	@Override
 	@Transactional
@@ -85,20 +83,6 @@ public class EstudianteServiceImpl implements EstudianteService {
 		return crearEstudianteDto(estudianteBD);
 	}
 	
-	@Transactional
-	private void crearRelacionDocenteEstudiante(Estudiante estudianteBD,Long idDirector,Long idCodirector) {
-		docenteRepository.findAllById(Arrays.asList(idDirector,idCodirector)).forEach(docente->{
-			String rolDocente = docente.getId().equals(idDirector)?"Director":"Codirector";
-			
-			DocenteEstudiante relacion = DocenteEstudiante.builder()
-					.estudiante(estudianteBD)
-					.docente(docente)
-					.tipo(rolDocente).build();
-			
-			docenteEstudianteRepository.save(relacion);
-		});
-	}
-	
 	@Override
 	@Transactional
 	public EstudianteResponseDto actualizar(Long idEstudiante, EstudianteSaveDto estudianteSaveDto, BindingResult result) {
@@ -118,7 +102,6 @@ public class EstudianteServiceImpl implements EstudianteService {
 		if(!validacionCamposUnicos.isEmpty()) {
 			throw new FieldUniqueException(validacionCamposUnicos);
 		}
-		
 		actualizarDirectorCodirector(idEstudiante, estudianteSaveDto.getIdDirector(),estudianteSaveDto.getIdCodirector());
 		actualizarInformacionEstudiante(estudiante, EstudianteBD);
 		
@@ -200,8 +183,8 @@ public class EstudianteServiceImpl implements EstudianteService {
 	
 	@Override
 	@Transactional
-	public EstadoCargaEstudianteDto cargarEstudiantes(MultipartFile file) {
-		EstadoCargaEstudianteDto EstadoCargaEstudiante=null;
+	public EstadoCargaMasivaDto cargarEstudiantes(MultipartFile file) {
+		EstadoCargaMasivaDto estadoCargaMasivaDto=null;
 
 		try (Workbook workBook = new XSSFWorkbook(file.getInputStream())) {
 			Sheet sheetEstudiante = workBook.getSheetAt(0);
@@ -233,14 +216,14 @@ public class EstudianteServiceImpl implements EstudianteService {
 					.toList();
 				
 			List<Estudiante> EstudiantesCargados = estudianteRepository.saveAll(estudianteSaveMapper.toEntityList(estudiantesAcargar));
-			EstadoCargaEstudiante = EstadoCargaEstudianteDto.builder()
-					.estudiantesRegistrados(EstudiantesCargados.size())
-					.EstudiantesExistentes(EstudiantesExistentes)
-					.estudiantesEstructuraIncorrecta(estudiantesEstructuraIncorrecta).build();
+			estadoCargaMasivaDto = EstadoCargaMasivaDto.builder()
+					.registrados(EstudiantesCargados.size())
+					.existentes(EstudiantesExistentes)
+					.estructuraIncorrecta(estudiantesEstructuraIncorrecta).build();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return EstadoCargaEstudiante;
+		return estadoCargaMasivaDto;
 	}
 	
 	private boolean ValidarEstudiante(@Valid EstudianteSaveDto estudianteSaveDto) {
@@ -263,6 +246,21 @@ public class EstudianteServiceImpl implements EstudianteService {
 		estudianteBD.setReingresos(estudiante.getReingresos());
 		
 	}
+	
+	@Transactional
+	private void crearRelacionDocenteEstudiante(Estudiante estudianteBD,Long idDirector,Long idCodirector) {
+		docenteRepository.findAllById(Arrays.asList(idDirector,idCodirector)).forEach(docente->{
+			String rolDocente = docente.getId().equals(idDirector)?"Director":"Codirector";
+			
+			DocenteEstudiante relacion = DocenteEstudiante.builder()
+					.estudiante(estudianteBD)
+					.docente(docente)
+					.tipo(rolDocente).build();
+			
+			docenteEstudianteRepository.save(relacion);
+		});
+	}
+	
 	
 	private void actualizarDirectorCodirector(Long idEstudiante,Long idDirector,Long idCodirector) {
 		Docente director= docenteRepository.findById(idDirector).orElseThrow(() -> new ResourceNotFoundException("Docente con id: " + idDirector + " No encontrado"));
@@ -287,22 +285,21 @@ public class EstudianteServiceImpl implements EstudianteService {
 		mapCamposUnicos.put("identificacion", dto->(camposUnicosBD == null || !dto.getIdentificacion().equals(camposUnicosBD.getIdentificacion())) && personaRepository.existsByIdentificacion(dto.getIdentificacion()));
 		mapCamposUnicos.put("correoElectronico", dto->(camposUnicosBD == null || !dto.getCorreoElectronico().equals(camposUnicosBD.getCorreoElectronico())) && personaRepository.existsByCorreoElectronico(dto.getCorreoElectronico()));
 		mapCamposUnicos.put("correoUniversidad",dto->(camposUnicosBD==null || !dto.getCorreoUniversidad().equals(camposUnicosBD.getCorreoUniversidad())) && estudianteRepository.existsByCorreoUniversidad(dto.getCorreoUniversidad()));
-		mapCamposUnicos.put("resolucionesProrroga",dto->{
-
-			List<String> prorrogasInvalidas = dto.getResolucionesProrroga().stream()
-					.filter(resolucion->{
-						return (camposUnicosBD==null || !camposUnicosBD.getResolucionesProrroga().stream().anyMatch(resolucionesBD->resolucionesBD.equals(resolucion))) && prorrogaRepository.existsByResolucion(resolucion);
-					}).toList();
-			dto.setResolucionesProrroga(prorrogasInvalidas);
+		mapCamposUnicos.put("prorrogas",dto->{
+			List<ProrrogaDto> prorrogasInvalidas = dto.getProrrogas().stream()
+					.filter(prorroga-> (camposUnicosBD!=null && !camposUnicosBD.getProrrogas().contains(prorroga)))
+					.filter(prorroga->prorrogaRepository.existsByResolucion(prorroga.getResolucion()) || dto.getProrrogas().stream().filter(p->p.getResolucion().equals(prorroga.getResolucion())).count()>1)
+					.collect(Collectors.toList());
+			dto.setProrrogas(prorrogasInvalidas);
 			return !prorrogasInvalidas.isEmpty();
 		});
 		
-		mapCamposUnicos.put("resolucionesReingreso",dto->{
-			List<String> reingresosInvalidos = dto.getResolucionesReingreso().stream()
-					.filter(resolucion->{
-						return (camposUnicosBD==null || !camposUnicosBD.getResolucionesReingreso().stream().anyMatch(resolucionesBD->resolucionesBD.equals(resolucion))) && reingresoRepository.existsByResolucion(resolucion);
-					}).toList();
-			dto.setResolucionesReingreso(reingresosInvalidos);
+		mapCamposUnicos.put("reingresos",dto->{
+			List<ReingresoDto> reingresosInvalidos = dto.getReingresos().stream()
+					.filter(reingreso-> (camposUnicosBD!=null && !camposUnicosBD.getReingresos().contains(reingreso)))
+					.filter(reingreso->reingresoRepository.existsByResolucion(reingreso.getResolucion()) || dto.getReingresos().stream().filter(r->r.getResolucion().equals(reingreso.getResolucion())).count()>1)
+					.collect(Collectors.toList());
+			dto.setReingresos(reingresosInvalidos);
 			return !reingresosInvalidos.isEmpty();
 		});
 		
@@ -316,7 +313,10 @@ public class EstudianteServiceImpl implements EstudianteService {
 				.collect(Collectors.toMap(Field::getName, field->{
 					Object valorCampo=null;
 					try {
-						valorCampo =field.get(camposUnicos);
+						valorCampo=field.getName().equals("prorrogas")?
+								camposUnicos.getProrrogas().stream().map(ProrrogaDto::getResolucion).distinct().toList():
+									field.getName().equals("reingresos")?
+											camposUnicos.getReingresos().stream().map(ReingresoDto::getResolucion).distinct().toList():field.get(camposUnicos);
 					}catch (IllegalAccessException e) {e.printStackTrace();}
 					return mensajeException(field.getName(),valorCampo);
 		}));

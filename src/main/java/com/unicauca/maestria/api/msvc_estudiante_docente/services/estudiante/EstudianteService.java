@@ -7,7 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstadoCargaEstudianteDto;
+import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.common.EstadoCargaMasivaDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstadoEstudianteDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstudianteResponseDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstudianteSaveDto;
@@ -24,5 +24,5 @@ public interface EstudianteService {
 	EstadoEstudianteDto actualizarEstadoEstudiante(Long idEstudiante,EstadoEstudianteDto estadoEstudianteDto,BindingResult result);
 	void eliminarFisico(Long idEstudiante);
 	void eliminarLogico(Long idEstudiante);
-	EstadoCargaEstudianteDto cargarEstudiantes(MultipartFile file);
+	EstadoCargaMasivaDto cargarEstudiantes(MultipartFile file);
 }

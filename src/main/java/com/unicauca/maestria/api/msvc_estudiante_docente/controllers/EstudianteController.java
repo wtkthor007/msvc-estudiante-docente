@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstadoCargaEstudianteDto;
+import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.common.EstadoCargaMasivaDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstadoEstudianteDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstudianteResponseDto;
 import com.unicauca.maestria.api.msvc_estudiante_docente.dtos.estudiante.EstudianteSaveDto;
@@ -63,7 +63,7 @@ public class EstudianteController {
 	
 	@PostMapping("/upload")
 	private ResponseEntity<?> cargarExcel(@RequestParam("file") MultipartFile file) {
-		EstadoCargaEstudianteDto CargaEstudianteDto  = estudianteService.cargarEstudiantes(file);
+		EstadoCargaMasivaDto CargaEstudianteDto  = estudianteService.cargarEstudiantes(file);
 		return ResponseEntity.status(HttpStatus.CREATED).body(CargaEstudianteDto);
 	}
 	

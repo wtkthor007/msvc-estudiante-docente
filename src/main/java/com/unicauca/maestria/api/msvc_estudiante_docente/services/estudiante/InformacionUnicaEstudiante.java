@@ -14,19 +14,17 @@ public class InformacionUnicaEstudiante implements Function<EstudianteSaveDto, C
 
 	@Override
 	public CamposUnicosEstudianteDto apply(EstudianteSaveDto estudianteSaveDto) {
-		List<String> resolucionProrrogas = estudianteSaveDto.getProrrogas().
-				stream().map(ProrrogaDto::getResolucion).toList();
-		
-		List<String> resolucionReingresos = estudianteSaveDto.getReingresos().
-				stream().map(ReingresoDto::getResolucion).toList();
-		
+
+		List<ProrrogaDto> prorrogas = estudianteSaveDto.getProrrogas();
+		List<ReingresoDto> reingresos = estudianteSaveDto.getReingresos();
+
 		return CamposUnicosEstudianteDto.builder()
 				.codigo(estudianteSaveDto.getCodigo())
 				.identificacion(estudianteSaveDto.getPersona().getIdentificacion())
 				.correoElectronico(estudianteSaveDto.getPersona().getCorreoElectronico())
 				.correoUniversidad(estudianteSaveDto.getCorreoUniversidad())
-				.resolucionesProrroga(resolucionProrrogas)
-				.resolucionesReingreso(resolucionReingresos)
+				.prorrogas(prorrogas)
+				.reingresos(reingresos)
 				.build();
 	}
 
